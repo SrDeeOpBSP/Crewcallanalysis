@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crew Call Analysis Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Tailwind dark mode configuration
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+    <style>
+        /* Custom styles for a modern, attractive theme */
+        body {
+            font-family: 'Inter', sans-serif; /* Using a popular sans-serif font */
+        }
+
+        .header-gradient {
+            background: linear-gradient(90deg, #4f46e5 0%, #3b82f6 100%);
+        }
+
+        .dashboard-card {
+            /* Softer shadow and bigger rounding */
+            border-radius: 1rem; /* rounded-2xl */
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); /* shadow-lg */
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+            animation: fadeInUp 0.5s ease-out forwards;
+        }
+
+        .dashboard-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1); /* shadow-xl */
+        }
+
+        .btn {
+            /* Base button styles */
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem; /* space between icon and text */
+            padding: 0.65rem 1.25rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            transition: all 0.2s ease-in-out;
+            cursor: pointer;
+            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+        }
+        
+        .btn-primary:hover {
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            transform: translateY(-2px);
+        }
+        
+        .btn-secondary:hover {
+            transform: translateY(-2px);
+        }
+
+        /* Animation for cards */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* Custom loader */
+        .loader {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: inline-block;
+            position: relative;
+            border: 3px solid;
+            border-color: #4f46e5 #4f46e5 transparent transparent;
+            box-sizing: border-box;
+            animation: spin 1.2s linear infinite;
+        }
+        .loader::after,
+        .loader::before {
+            content: '';  
+            box-sizing: border-box;
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            margin: auto;
+            border: 3px solid;
+            border-color: transparent transparent #3b82f6 #3b82f6;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            box-sizing: border-box;
+            animation: spin-reverse 0.6s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        @keyframes spin-reverse {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(-360deg); }
+        }
+    </style>
+</head>
+<body class="bg-amber-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200">
+
+    <div class="container mx-auto p-4 md:p-8">
+        
+        <header class="text-center mb-8 relative">
+            <div class="p-6 rounded-2xl header-gradient text-white shadow-lg">
+                <h1 class="text-3xl md:text-4xl font-bold">Crew Call Analysis Dashboard</h1>
+                <p class="opacity-90 mt-2">Sign-On/Sign-Off aur CUG data ko analyze karein.</p>
+            </div>
+            <button id="theme-toggle" class="absolute top-4 right-4 p-2 rounded-full bg-indigo-500 hover:bg-indigo-600 text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-indigo-700 focus:ring-white transition">
+                <svg id="theme-toggle-dark-icon" class="w-6 h-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                <svg id="theme-toggle-light-icon" class="w-6 h-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m8.66-8.66l-.707.707M4.04 4.04l-.707.707m15.92 0l-.707-.707M4.04 19.96l-.707-.707M21 12h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707"></path><circle cx="12" cy="12" r="5"></circle></svg>
+            </button>
+        </header>
+
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-xl mb-8">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label for="signOnOffFile" class="flex items-center gap-2 mb-2 text-sm font-medium text-slate-600 dark:text-slate-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm5 6a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V8z" clip-rule="evenodd" /></svg>
+                        1. Upload Sign-On to Sign-Off Data
+                    </label>
+                    <input type="file" id="signOnOffFile" accept=".xlsx, .xls, .csv" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 dark:file:bg-indigo-900/50 file:text-indigo-700 dark:file:text-indigo-300 hover:file:bg-indigo-100 dark:hover:file:bg-indigo-900/80 transition-colors">
+                </div>
+                <div>
+                    <label for="cugFile" class="flex items-center gap-2 mb-2 text-sm font-medium text-slate-600 dark:text-slate-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm5 6a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V8z" clip-rule="evenodd" /></svg>
+                        2. Upload CUG Data
+                    </label>
+                    <input type="file" id="cugFile" accept=".xlsx, .xls, .csv" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 dark:file:bg-indigo-900/50 file:text-indigo-700 dark:file:text-indigo-300 hover:file:bg-indigo-100 dark:hover:file:bg-indigo-900/80 transition-colors">
+                </div>
+            </div>
+            <div class="mt-6 text-center">
+                <button id="analyzeBtn" class="btn bg-indigo-600 text-white w-full md:w-auto hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" /></svg>
+                    Analyze Data
+                </button>
+            </div>
+        </div>
+
+        <div id="loader" class="hidden flex-col justify-center items-center mt-8">
+            <div class="loader"></div>
+            <p id="loader-text" class="ml-4 text-lg text-slate-600 dark:text-slate-400 mt-4">Analyzing data... Please wait.</p>
+        </div>
+        
+        <div id="messageArea" class="hidden mt-4 text-center p-4 rounded-lg"></div>
+
+        <div id="results" class="hidden">
+            <div id="lobby-dashboard" class="dashboard-card bg-white dark:bg-slate-800 p-6">
+                <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
+                    <h2 class="text-2xl font-semibold text-slate-700 dark:text-slate-200">Lobby-wise Analysis</h2>
+                    <button id="downloadLobby" class="btn bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                        Download Excel
+                    </button>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div>
+                        <h3 class="text-xl font-medium mb-3 text-center text-slate-600 dark:text-slate-300">Tabular Data</h3>
+                        <div class="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+                            <table class="w-full text-sm text-slate-600 dark:text-slate-400">
+                                <thead class="text-xs text-slate-700 dark:text-slate-200 uppercase bg-slate-200 dark:bg-slate-700 font-bold">
+                                    <tr>
+                                        <th scope="col" class="px-6 py-3 border border-slate-300 dark:border-slate-600">Lobby</th>
+                                        <th scope="col" class="px-6 py-3 border border-slate-300 dark:border-slate-600">Number of Calls</th>
+                                        <th scope="col" class="px-6 py-3 border border-slate-300 dark:border-slate-600">Total Duration (sec)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="lobby-table-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-medium mb-3 text-center text-slate-600 dark:text-slate-300">Graphical View</h3>
+                        <div class="relative h-80 md:h-96">
+                            <canvas id="lobby-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="designation-dashboard" class="dashboard-card hidden bg-white dark:bg-slate-800 p-6">
+                <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
+                    <h2 class="text-2xl font-semibold text-slate-700 dark:text-slate-200" id="desig-title">Designation-wise Analysis</h2>
+                    <div class="flex gap-2">
+                        <button id="backToLobby" class="btn bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" /></svg>
+                            Back
+                        </button>
+                        <button id="downloadDesig" class="btn bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                            Download Excel
+                        </button>
+                    </div>
+                </div>
+                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div>
+                        <h3 class="text-xl font-medium mb-3 text-center text-slate-600 dark:text-slate-300">Tabular Data</h3>
+                        <div class="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+                            <table class="w-full text-sm text-slate-600 dark:text-slate-400">
+                                <thead class="text-xs text-slate-700 dark:text-slate-200 uppercase bg-slate-200 dark:bg-slate-700 font-bold">
+                                    <tr>
+                                        <th scope="col" class="px-6 py-3 border border-slate-300 dark:border-slate-600">Designation</th>
+                                        <th scope="col" class="px-6 py-3 border border-slate-300 dark:border-slate-600">Number of Calls</th>
+                                        <th scope="col" class="px-6 py-3 border border-slate-300 dark:border-slate-600">Total Duration (sec)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="desig-table-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-medium mb-3 text-center text-slate-600 dark:text-slate-300">Graphical View</h3>
+                        <div class="relative h-80 md:h-96">
+                            <canvas id="desig-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="crew-dashboard" class="dashboard-card hidden bg-white dark:bg-slate-800 p-6">
+                <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
+                    <h2 class="text-2xl font-semibold text-slate-700 dark:text-slate-200" id="crew-title">Crew Call Details</h2>
+                    <div class="flex gap-2">
+                        <button id="backToDesig" class="btn bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" /></svg>
+                            Back
+                        </button>
+                        <button id="downloadCrew" class="btn bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600">
+                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                            Download Excel
+                        </button>
+                    </div>
+                </div>
+                <div class="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+                    <table class="w-full text-sm text-slate-600 dark:text-slate-400">
+                        <thead class="text-xs text-slate-700 dark:text-slate-200 uppercase bg-slate-200 dark:bg-slate-700 font-bold">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 border border-slate-300 dark:border-slate-600">S.No.</th>
+                                <th scope="col" class="px-6 py-3 border border-slate-300 dark:border-slate-600">Crew ID</th>
+                                <th scope="col" class="px-6 py-3 border border-slate-300 dark:border-slate-600">Crew Name</th>
+                                <th scope="col" class="px-6 py-3 border border-slate-300 dark:border-slate-600">Start Call Time</th>
+                                <th scope="col" class="px-6 py-3 border border-slate-300 dark:border-slate-600">End Call Time</th>
+                                <th scope="col" class="px-6 py-3 border border-slate-300 dark:border-slate-600">Duration (sec)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="crew-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Rest of the JavaScript remains exactly the same
+        document.addEventListener('DOMContentLoaded', function () {
+            // --- Dark Mode Toggle Logic ---
+            const themeToggleBtn = document.getElementById('theme-toggle');
+            const darkIcon = document.getElementById('theme-toggle-dark-icon');
+            const lightIcon = document.getElementById('theme-toggle-light-icon');
+
+            // Set initial icon based on theme
+            if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                lightIcon.classList.remove('hidden');
+                document.documentElement.classList.add('dark');
+            } else {
+                darkIcon.classList.remove('hidden');
+                document.documentElement.classList.remove('dark');
+            }
+
+            themeToggleBtn.addEventListener('click', function() {
+                darkIcon.classList.toggle('hidden');
+                lightIcon.classList.toggle('hidden');
+                if (localStorage.getItem('theme')) {
+                    if (localStorage.getItem('theme') === 'light') {
+                        document.documentElement.classList.add('dark');
+                        localStorage.setItem('theme', 'dark');
+                    } else {
+                        document.documentElement.classList.remove('dark');
+                        localStorage.setItem('theme', 'light');
+                    }
+                } else {
+                    if (document.documentElement.classList.contains('dark')) {
+                        document.documentElement.classList.remove('dark');
+                        localStorage.setItem('theme', 'light');
+                    } else {
+                        document.documentElement.classList.add('dark');
+                        localStorage.setItem('theme', 'dark');
+                    }
+                }
+                // We need to re-render charts on theme change for grid colors to update
+                if(currentDesig){
+                        const filteredData = matchedCalls.filter(call => call['LOBBY'] === currentLobby);
+                        renderDesignationDashboard(filteredData, currentLobby);
+                } else if (currentLobby) {
+                    const filteredData = matchedCalls.filter(call => call['LOBBY'] === currentLobby);
+                    renderDesignationDashboard(filteredData, currentLobby);
+                } else if (matchedCalls.length > 0) {
+                    renderLobbyDashboard(matchedCalls);
+                }
+            });
+
+
+            // DOM Elements
+            const analyzeBtn = document.getElementById('analyzeBtn');
+            const signOnOffFileInput = document.getElementById('signOnOffFile');
+            const cugFileInput = document.getElementById('cugFile');
+            const loader = document.getElementById('loader');
+            const loaderText = document.getElementById('loader-text');
+            const resultsDiv = document.getElementById('results');
+            const messageArea = document.getElementById('messageArea');
+
+            // Dashboard Panels
+            const lobbyDashboard = document.getElementById('lobby-dashboard');
+            const desigDashboard = document.getElementById('designation-dashboard');
+            const crewDashboard = document.getElementById('crew-dashboard');
+            
+            // Back Buttons
+            const backToLobbyBtn = document.getElementById('backToLobby');
+            const backToDesigBtn = document.getElementById('backToDesig');
+
+            // Download Buttons
+            const downloadLobbyBtn = document.getElementById('downloadLobby');
+            const downloadDesigBtn = document.getElementById('downloadDesig');
+            const downloadCrewBtn = document.getElementById('downloadCrew');
+
+            // Global state variables
+            let matchedCalls = [];
+            let currentLobby = null;
+            let currentDesig = null;
+            let analysisWorker = null;
+            
+            // Data for download
+            let lobbyExportData = [];
+            let desigExportData = [];
+            let crewExportData = [];
+
+            // --- Utility Functions ---
+
+            function showMessage(message, isError = true) {
+                messageArea.textContent = message;
+                messageArea.className = `mt-4 text-center p-4 rounded-lg ${isError ? 'bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300' : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'}`;
+                messageArea.classList.remove('hidden');
+            }
+
+            function hideMessage() {
+                messageArea.classList.add('hidden');
+            }
+            
+            function readExcel(file) {
+                return new Promise((resolve, reject) => {
+                    if (!file) {
+                        reject(new Error("File not selected."));
+                        return;
+                    }
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        try {
+                            const data = new Uint8Array(event.target.result);
+                            const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                            const sheetName = workbook.SheetNames[0];
+                            const worksheet = workbook.Sheets[sheetName];
+                            const json = XLSX.utils.sheet_to_json(worksheet);
+                            resolve(json);
+                        } catch (e) {
+                            reject(e);
+                        }
+                    };
+                    reader.onerror = (error) => reject(error);
+                    reader.readAsArrayBuffer(file);
+                });
+            }
+            
+            function downloadExcel(data, filename) {
+                const worksheet = XLSX.utils.json_to_sheet(data);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
+                XLSX.writeFile(workbook, `${filename}.xlsx`);
+            }
+
+            // --- Web Worker for heavy analysis ---
+            function createWorker() {
+                const workerScript = `
+                    function getDate(value) {
+                        if (value instanceof Date && !isNaN(value)) return value;
+                        if (typeof value === 'string') {
+                            const parts = value.split(' ');
+                            if (parts.length < 2) return null;
+                            const dateParts = parts[0].split('-');
+                            const timeParts = parts[1].split(':');
+                            if (dateParts.length !== 3 || timeParts.length < 2) return null;
+                            const day = parseInt(dateParts[0], 10), month = parseInt(dateParts[1], 10) - 1, year = parseInt(dateParts[2], 10);
+                            if (year < 2000) return null;
+                            const date = new Date(year, month, day, timeParts[0] || 0, timeParts[1] || 0, timeParts[2] || 0);
+                            if (!isNaN(date)) return date;
+                        }
+                        const d = new Date(value);
+                        if (d instanceof Date && !isNaN(d)) return d;
+                        return null;
+                    }
+
+                    self.onmessage = function(e) {
+                        const { signOnData, cugData } = e.data;
+                        self.postMessage({ status: 'preprocessing' });
+                        const cugDataMap = cugData.reduce((acc, call) => {
+                            const cugNumber = call['CUG NUMBER'];
+                            if (cugNumber) {
+                                if (!acc[cugNumber]) acc[cugNumber] = [];
+                                acc[cugNumber].push({ 
+                                    ...call, 
+                                    callStartDate: getDate(call['Start Date & Time']),
+                                    callEndDate: getDate(call['End Date & Time']) // Parse End Time as well
+                                });
+                            }
+                            return acc;
+                        }, {});
+
+                        self.postMessage({ status: 'matching' });
+                        const matchedCalls = [];
+                        signOnData.forEach(signOnEntry => {
+                            const mobileNumber = signOnEntry['MOBILE NUMBER'];
+                            if (!mobileNumber) return;
+                            const signOnDate = getDate(signOnEntry['SIGNON DATE']);
+                            const signOutDate = getDate(signOnEntry['SIGNOFF DATE']);
+                            if (!signOnDate || !signOutDate) return;
+                            const relevantCalls = cugDataMap[mobileNumber];
+                            if (relevantCalls) {
+                                relevantCalls.forEach(cugCall => {
+                                    if (cugCall.callStartDate && cugCall.callStartDate >= signOnDate && cugCall.callStartDate <= signOutDate) {
+                                        matchedCalls.push({ ...signOnEntry, callDetails: cugCall });
+                                    }
+                                });
+                            }
+                        });
+                        self.postMessage({ status: 'complete', data: matchedCalls });
+                    };
+                `;
+                const blob = new Blob([workerScript], { type: 'application/javascript' });
+                return new Worker(URL.createObjectURL(blob));
+            }
+
+
+            // --- Analysis Logic ---
+            analyzeBtn.addEventListener('click', async () => {
+                hideMessage();
+                resultsDiv.classList.add('hidden');
+                
+                const signOnFile = signOnOffFileInput.files[0];
+                const cugFile = cugFileInput.files[0];
+
+                if (!signOnFile || !cugFile) {
+                    showMessage("Dono files select karna zaroori hai.");
+                    return;
+                }
+
+                loader.classList.remove('hidden');
+                loader.classList.add('flex'); // use flex for column layout
+                loaderText.textContent = "Reading files...";
+                analyzeBtn.disabled = true;
+
+                try {
+                    const [signOnData, cugData] = await Promise.all([
+                        readExcel(signOnFile),
+                        readExcel(cugFile)
+                    ]);
+
+                    const signOnHeaders = signOnData.length > 0 ? Object.keys(signOnData[0]) : [];
+                    const cugHeaders = cugData.length > 0 ? Object.keys(cugData[0]) : [];
+                    const requiredSignOnHeaders = ['LOBBY', 'CREW ID', 'MOBILE NUMBER', 'NAME', 'DESIG', 'SIGNON DATE', 'SIGNOFF DATE'];
+                    const requiredCugHeaders = ['CUG NUMBER', 'Start Date & Time', 'End Date & Time', 'DURATION(SEC.)'];
+                    let missingHeaders = [];
+                    requiredSignOnHeaders.forEach(h => { if (!signOnHeaders.includes(h)) missingHeaders.push(`'${h}' (Sign-On File)`); });
+                    requiredCugHeaders.forEach(h => { if (!cugHeaders.includes(h)) missingHeaders.push(`'${h}' (CUG File)`); });
+
+                    if (missingHeaders.length > 0) {
+                        showMessage(`Error: Zaroori column nahi mila: ${missingHeaders.join(', ')}. File check karein.`);
+                        loader.classList.add('hidden');
+                        analyzeBtn.disabled = false;
+                        return;
+                    }
+                    
+                    loaderText.textContent = "Data processing shuru ho gaya hai... UI responsive rahega.";
+                    if (analysisWorker) analysisWorker.terminate();
+                    analysisWorker = createWorker();
+                    analysisWorker.postMessage({ signOnData, cugData });
+
+                    analysisWorker.onmessage = (e) => {
+                        const { status, data } = e.data;
+                        if (status === 'preprocessing') loaderText.textContent = "CUG data ko optimize kiya ja raha hai...";
+                        else if (status === 'matching') loaderText.textContent = "Calls match kiye ja rahe hain...";
+                        else if (status === 'complete') {
+                            loader.classList.add('hidden');
+                            analyzeBtn.disabled = false;
+                            analysisWorker.terminate();
+                            if (data && data.length > 0) {
+                                matchedCalls = data;
+                                renderLobbyDashboard(matchedCalls);
+                                resultsDiv.classList.remove('hidden');
+                                hideMessage();
+                            } else {
+                                resultsDiv.classList.add('hidden');
+                                showMessage("Analysis poora hua. Dono files ke beech koi matching calls nahi mile.", false);
+                            }
+                        }
+                    };
+
+                    analysisWorker.onerror = (error) => {
+                        console.error("Worker error:", error);
+                        showMessage("Analysis mein error aa gaya. Console check karein.");
+                        loader.classList.add('hidden');
+                        analyzeBtn.disabled = false;
+                    };
+
+                } catch (error) {
+                    console.error("Error processing files:", error);
+                    showMessage("File process karne mai error aaya. Check karein ki file format sahi hai.");
+                    loader.classList.add('hidden');
+                    analyzeBtn.disabled = false;
+                }
+            });
+
+            // --- Rendering Functions ---
+
+            function getChartColors(count) {
+                // New, more professional and colourful palette
+                const colors = [
+                    '#3b82f6', '#10b981', '#f97316', '#8b5cf6', '#ef4444', '#f59e0b',
+                    '#14b8a6', '#6366f1', '#d946ef', '#0ea5e9', '#84cc16', '#eab308'
+                ];
+                const palette = [];
+                for (let i = 0; i < count; i++) {
+                    palette.push(colors[i % colors.length]);
+                }
+                return palette;
+            }
+
+            function renderChart(canvasId, labels, data, chartLabel) {
+                const ctx = document.getElementById(canvasId).getContext('2d');
+                if (window[canvasId + '_chart']) window[canvasId + '_chart'].destroy();
+                
+                const backgroundColors = getChartColors(labels.length);
+                const isDarkMode = document.documentElement.classList.contains('dark');
+                const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : '#E5E7EB';
+                const tickColor = isDarkMode ? '#cbd5e1' : '#4B5563';
+
+                window[canvasId + '_chart'] = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: chartLabel,
+                            data: data,
+                            backgroundColor: backgroundColors,
+                            borderColor: backgroundColors,
+                            borderWidth: 1,
+                            borderRadius: 5,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: tickColor } },
+                            x: { grid: { display: false }, ticks: { color: tickColor } }
+                        },
+                        plugins: { 
+                            legend: { 
+                                display: true, // Show legend
+                                labels: {
+                                    color: tickColor // Set legend text color
+                                }
+                            },
+                            tooltip: {
+                                backgroundColor: isDarkMode ? '#1f2937' : '#fff',
+                                titleColor: isDarkMode ? '#fff' : '#1f2937',
+                                bodyColor: isDarkMode ? '#fff' : '#1f2937',
+                                borderColor: gridColor,
+                                borderWidth: 1,
+                            }
+                        }
+                    }
+                });
+            }
+
+            function renderLobbyDashboard(data) {
+                const lobbyData = data.reduce((acc, call) => {
+                    const lobby = call['LOBBY'];
+                    if (!acc[lobby]) acc[lobby] = { calls: 0, duration: 0 };
+                    acc[lobby].calls++;
+                    acc[lobby].duration += call.callDetails['DURATION(SEC.)'] || 0;
+                    return acc;
+                }, {});
+
+                const tableBody = document.getElementById('lobby-table-body');
+                tableBody.innerHTML = '';
+                lobbyExportData = [];
+                let totalCalls = 0, totalDuration = 0;
+                
+                const sortedLobbies = Object.keys(lobbyData).sort();
+
+                sortedLobbies.forEach(lobby => {
+                    const calls = lobbyData[lobby].calls;
+                    const duration = lobbyData[lobby].duration;
+                    totalCalls += calls;
+                    totalDuration += duration;
+
+                    const row = tableBody.insertRow();
+                    row.className = 'odd:bg-white even:bg-slate-50 dark:odd:bg-slate-800 dark:even:bg-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-center';
+                    row.innerHTML = `
+                        <td class="px-6 py-4 border border-slate-200 dark:border-slate-700 font-medium text-slate-900 dark:text-white">${lobby}</td>
+                        <td class="px-6 py-4 border border-slate-200 dark:border-slate-700"><a href="#" data-lobby="${lobby}" class="font-medium text-indigo-600 dark:text-indigo-400 hover:underline">${calls}</a></td>
+                        <td class="px-6 py-4 border border-slate-200 dark:border-slate-700">${Math.round(duration)}</td>
+                    `;
+                    lobbyExportData.push({ 'Lobby': lobby, 'Number of Calls': calls, 'Total Duration (sec)': Math.round(duration) });
+                });
+                
+                // Add Total Row
+                const totalRow = tableBody.insertRow();
+                totalRow.className = 'font-bold bg-slate-200 dark:bg-slate-700 border-t-2 border-slate-300 dark:border-slate-600 text-center';
+                totalRow.innerHTML = `
+                    <td class="px-6 py-4 border border-slate-300 dark:border-slate-600">Total</td>
+                    <td class="px-6 py-4 border border-slate-300 dark:border-slate-600">${totalCalls}</td>
+                    <td class="px-6 py-4 border border-slate-300 dark:border-slate-600">${Math.round(totalDuration)}</td>
+                `;
+
+                tableBody.querySelectorAll('a').forEach(link => {
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        currentLobby = e.target.getAttribute('data-lobby');
+                        const filteredData = matchedCalls.filter(call => call['LOBBY'] === currentLobby);
+                        renderDesignationDashboard(filteredData, currentLobby);
+                    });
+                });
+
+                const labels = sortedLobbies;
+                const chartData = labels.map(lobby => lobbyData[lobby].calls);
+                renderChart('lobby-chart', labels, chartData, '# of Calls');
+
+                lobbyDashboard.classList.remove('hidden');
+                desigDashboard.classList.add('hidden');
+                crewDashboard.classList.add('hidden');
+            }
+
+            function renderDesignationDashboard(data, lobbyName) {
+                const desigData = data.reduce((acc, call) => {
+                    const desig = call['DESIG'];
+                    if (!acc[desig]) acc[desig] = { calls: 0, duration: 0 };
+                    acc[desig].calls++;
+                    acc[desig].duration += call.callDetails['DURATION(SEC.)'] || 0;
+                    return acc;
+                }, {});
+
+                const tableBody = document.getElementById('desig-table-body');
+                tableBody.innerHTML = '';
+                document.getElementById('desig-title').innerText = `Analysis for ${lobbyName} Lobby`;
+                desigExportData = [];
+                let totalCalls = 0, totalDuration = 0;
+
+                const sortedDesigs = Object.keys(desigData).sort();
+                
+                sortedDesigs.forEach(desig => {
+                    const calls = desigData[desig].calls;
+                    const duration = desigData[desig].duration;
+                    totalCalls += calls;
+                    totalDuration += duration;
+
+                    const row = tableBody.insertRow();
+                    row.className = 'odd:bg-white even:bg-slate-50 dark:odd:bg-slate-800 dark:even:bg-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-center';
+                    row.innerHTML = `
+                        <td class="px-6 py-4 border border-slate-200 dark:border-slate-700 font-medium text-slate-900 dark:text-white">${desig}</td>
+                        <td class="px-6 py-4 border border-slate-200 dark:border-slate-700"><a href="#" data-desig="${desig}" class="font-medium text-indigo-600 dark:text-indigo-400 hover:underline">${calls}</a></td>
+                        <td class="px-6 py-4 border border-slate-200 dark:border-slate-700">${Math.round(duration)}</td>
+                    `;
+                    desigExportData.push({ 'Designation': desig, 'Number of Calls': calls, 'Total Duration (sec)': Math.round(duration) });
+                });
+                
+                // Add Total Row
+                const totalRow = tableBody.insertRow();
+                totalRow.className = 'font-bold bg-slate-200 dark:bg-slate-700 border-t-2 border-slate-300 dark:border-slate-600 text-center';
+                totalRow.innerHTML = `
+                    <td class="px-6 py-4 border border-slate-300 dark:border-slate-600">Total</td>
+                    <td class="px-6 py-4 border border-slate-300 dark:border-slate-600">${totalCalls}</td>
+                    <td class="px-6 py-4 border border-slate-300 dark:border-slate-600">${Math.round(totalDuration)}</td>
+                `;
+
+                tableBody.querySelectorAll('a').forEach(link => {
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        currentDesig = e.target.getAttribute('data-desig');
+                        const filteredData = data.filter(call => call['DESIG'] === currentDesig);
+                        renderCrewDetailDashboard(filteredData, lobbyName, currentDesig);
+                    });
+                });
+                
+                const labels = sortedDesigs;
+                const chartData = labels.map(desig => desigData[desig].calls);
+                renderChart('desig-chart', labels, chartData, '# of Calls');
+
+                lobbyDashboard.classList.add('hidden');
+                desigDashboard.classList.remove('hidden');
+                crewDashboard.classList.add('hidden');
+            }
+
+            function renderCrewDetailDashboard(data, lobbyName, desigName) {
+                const tableBody = document.getElementById('crew-table-body');
+                tableBody.innerHTML = '';
+                document.getElementById('crew-title').innerText = `Call Details: ${desigName} in ${lobbyName}`;
+                crewExportData = [];
+
+                data.sort((a, b) => a.callDetails.callStartDate - b.callDetails.callStartDate);
+
+                data.forEach((call, index) => {
+                    const row = tableBody.insertRow();
+                    row.className = 'odd:bg-white even:bg-slate-50 dark:odd:bg-slate-800 dark:even:bg-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors text-center';
+                    const callDetails = call.callDetails;
+                    
+                    const localeOptions = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+                    const startDateStr = callDetails.callStartDate instanceof Date ? callDetails.callStartDate.toLocaleString('en-IN', localeOptions) : 'N/A';
+                    const endDateStr = callDetails.callEndDate instanceof Date ? callDetails.callEndDate.toLocaleString('en-IN', localeOptions) : callDetails['End Date & Time'];
+
+                    row.innerHTML = `
+                        <td class="px-6 py-4 border border-slate-200 dark:border-slate-700">${index + 1}</td>
+                        <td class="px-6 py-4 border border-slate-200 dark:border-slate-700 font-medium text-slate-900 dark:text-white">${call['CREW ID']}</td>
+                        <td class="px-6 py-4 border border-slate-200 dark:border-slate-700">${call['NAME']}</td>
+                        <td class="px-6 py-4 border border-slate-200 dark:border-slate-700">${startDateStr}</td>
+                        <td class="px-6 py-4 border border-slate-200 dark:border-slate-700">${endDateStr}</td>
+                        <td class="px-6 py-4 border border-slate-200 dark:border-slate-700">${callDetails['DURATION(SEC.)']}</td>
+                    `;
+                    crewExportData.push({
+                        'S.No.': index + 1,
+                        'Crew ID': call['CREW ID'],
+                        'Crew Name': call['NAME'],
+                        'Start Call Time': startDateStr,
+                        'End Call Time': endDateStr,
+                        'Duration (sec)': callDetails['DURATION(SEC.)']
+                    });
+                });
+
+                lobbyDashboard.classList.add('hidden');
+                desigDashboard.classList.add('hidden');
+                crewDashboard.classList.remove('hidden');
+            }
+            
+            // --- Navigation and Download Handlers ---
+            backToLobbyBtn.addEventListener('click', () => {
+                currentLobby = null; // Reset lobby state
+                currentDesig = null;
+                renderLobbyDashboard(matchedCalls)
+            });
+            backToDesigBtn.addEventListener('click', () => {
+                currentDesig = null; // Reset desig state
+                const filteredData = matchedCalls.filter(call => call['LOBBY'] === currentLobby);
+                renderDesignationDashboard(filteredData, currentLobby);
+            });
+            downloadLobbyBtn.addEventListener('click', () => { if(lobbyExportData.length > 0) downloadExcel(lobbyExportData, 'Lobby_Analysis'); });
+            downloadDesigBtn.addEventListener('click', () => { if(desigExportData.length > 0) downloadExcel(desigExportData, `${currentLobby}_Designation_Analysis`); });
+            downloadCrewBtn.addEventListener('click', () => { if(crewExportData.length > 0) downloadExcel(crewExportData, `${currentLobby}_${currentDesig}_Crew_Details`); });
+        });
+    </script>
+</body>
+</html>
