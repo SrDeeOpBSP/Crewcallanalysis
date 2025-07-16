@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Crew Call Analysis Dashboard</title>
+    <title>CREW CALL ANALYSIS DASHBOARD</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -117,8 +117,8 @@
         
         <header class="text-center mb-8 relative">
             <div class="p-6 rounded-2xl header-gradient text-white shadow-lg">
-                <h1 class="text-3xl md:text-4xl font-bold">Crew Call Analysis Dashboard</h1>
-                <p class="opacity-90 mt-2">Sign-On/Sign-Off aur CUG data ko analyze karein.</p>
+                <h1 class="text-3xl md:text-4xl font-bold">CREW CALL ANALYSIS DASHBOARD</h1>
+                <p class="opacity-90 mt-2">Conduct a comprehensive analysis of Sign-On/Sign-Off and CUG data to derive actionable insights.</p>
             </div>
             <button id="theme-toggle" class="absolute top-4 right-4 p-2 rounded-full bg-indigo-500 hover:bg-indigo-600 text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-indigo-700 focus:ring-white transition">
                 <svg id="theme-toggle-dark-icon" class="w-6 h-6 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
@@ -492,15 +492,15 @@
                         return;
                     }
                     
-                    loaderText.textContent = "Data processing shuru ho gaya hai... UI responsive rahega.";
+                    loaderText.textContent = "Data processing is underway... The user interface will stay responsive.";
                     if (analysisWorker) analysisWorker.terminate();
                     analysisWorker = createWorker();
                     analysisWorker.postMessage({ signOnData, cugData });
 
                     analysisWorker.onmessage = (e) => {
                         const { status, data } = e.data;
-                        if (status === 'preprocessing') loaderText.textContent = "CUG data ko optimize kiya ja raha hai...";
-                        else if (status === 'matching') loaderText.textContent = "Calls match kiye ja rahe hain...";
+                        if (status === 'preprocessing') loaderText.textContent = "Optimization of CUG data is in progress...";
+                        else if (status === 'matching') loaderText.textContent = "Call matching is currently underway...";
                         else if (status === 'complete') {
                             loader.classList.add('hidden');
                             analyzeBtn.disabled = false;
@@ -512,21 +512,21 @@
                                 hideMessage();
                             } else {
                                 resultsDiv.classList.add('hidden');
-                                showMessage("Analysis poora hua. Dono files ke beech koi matching calls nahi mile.", false);
+                                showMessage("The analysis is finished — no call matches were detected between the two datasets.", false);
                             }
                         }
                     };
 
                     analysisWorker.onerror = (error) => {
                         console.error("Worker error:", error);
-                        showMessage("Analysis mein error aa gaya. Console check karein.");
+                        showMessage("Analysis failed due to an error — refer to the console for more information.");
                         loader.classList.add('hidden');
                         analyzeBtn.disabled = false;
                     };
 
                 } catch (error) {
                     console.error("Error processing files:", error);
-                    showMessage("File process karne mai error aaya. Check karein ki file format sahi hai.");
+                    showMessage("An error was encountered during file processing. Confirm that the file format is proper.");
                     loader.classList.add('hidden');
                     analyzeBtn.disabled = false;
                 }
